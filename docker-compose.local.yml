@@ -1,0 +1,54 @@
+version: "3.9"
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: development
+    ports:
+      - "8000:8000"
+    environment:
+      ENV: development
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    networks:
+      - postgres
+      - backend
+    volumes:
+      - ./app:/app/app
+
+  postgres:
+    image: postgres:15.1
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGDATA: /data/postgres
+    volumes:
+       - postgres:/data/postgres
+    ports:
+      - "5432:5432"
+    networks:
+      - postgres
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4.0
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data:/data
+    networks:
+      - postgres
+      - backend
+
+networks:
+  postgres:
+  backend:
+
+volumes:
+    postgres:
