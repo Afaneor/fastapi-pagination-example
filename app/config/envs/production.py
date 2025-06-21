@@ -4,7 +4,7 @@ from config.constants import ENV_FILE_PATH
 
 
 class ProductionConfig(BaseSettings):
-    env: str = 'production'
+    env: str = "production"
     reload: bool = False
     workers: int = 8
 
@@ -19,5 +19,5 @@ class ProductionConfig(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE_PATH,
-        env_file_encoding='utf-8',
+        env_file_encoding="utf-8",
     )

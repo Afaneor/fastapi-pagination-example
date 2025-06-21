@@ -4,7 +4,7 @@ from config.constants import ENV_FILE_PATH
 
 
 class DevelopmentConfig(BaseSettings):
-    env: str = 'development'
+    env: str = "development"
     reload: bool = True
     workers: int = 2
 
@@ -21,5 +21,5 @@ class DevelopmentConfig(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE_PATH,
-        env_file_encoding='utf-8',
+        env_file_encoding="utf-8",
     )

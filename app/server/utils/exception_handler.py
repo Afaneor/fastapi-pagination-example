@@ -8,8 +8,8 @@ from pydantic_i18n import PydanticI18n, BabelLoader
 
 from config.constants import APP_DIR
 
-class CustomBabelLoader(BabelLoader):  # FIXME move to separate file
 
+class CustomBabelLoader(BabelLoader):  # FIXME move to separate file
     def __init__(self, translations_directory: str, domain: str = "messages"):
         try:
             from babel import Locale
@@ -22,11 +22,11 @@ class CustomBabelLoader(BabelLoader):  # FIXME move to separate file
 
         self.translations = {}
 
-        for dir_name in [d for d in os.listdir(translations_directory)
-                         if os.path.isdir(
-                os.path.join(translations_directory, d)
-            )
-                         ]:
+        for dir_name in [
+            d
+            for d in os.listdir(translations_directory)
+            if os.path.isdir(os.path.join(translations_directory, d))
+        ]:
             locale = Locale.parse(dir_name)
             self.translations[str(locale)] = Translations.load(
                 translations_directory,
@@ -34,11 +34,13 @@ class CustomBabelLoader(BabelLoader):  # FIXME move to separate file
                 domain=domain,
             )
 
-loader = CustomBabelLoader(os.path.join(APP_DIR, 'locales'))
+
+loader = CustomBabelLoader(os.path.join(APP_DIR, "locales"))
 tr = PydanticI18n(
     loader,
-    default_locale='en',
+    default_locale="en",
 )
+
 
 async def validation_exception_handler(
     request: Request, exc: RequestValidationError

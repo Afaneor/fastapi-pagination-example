@@ -15,6 +15,7 @@ from server.utils.exception_handler import validation_exception_handler
 
 def _init_router(_app: FastAPI) -> None:
     from api import router
+
     _app.include_router(router)
 
 
@@ -30,12 +31,13 @@ def _init_middleware(_app: FastAPI) -> None:
 
 def _init_internalization(_app: FastAPI) -> None:
     _app.add_middleware(
-        BabelMiddleware, babel_configs=BabelConfigs(
+        BabelMiddleware,
+        babel_configs=BabelConfigs(
             ROOT_DIR=APP_DIR.joinpath("any"),
             # we need this hack because of the way BabelConfigs is implemented, it takes parent dir
             BABEL_DEFAULT_LOCALE="en",
             BABEL_TRANSLATION_DIRECTORY="locales",
-        )
+        ),
     )
 
 
@@ -66,7 +68,7 @@ async def lifespan_test(_app: FastAPI) -> AsyncGenerator[None, None]:
             _create_db=True,
         ):
             yield
-    except Exception as e:
+    except Exception:
         raise
     finally:
         await Tortoise._drop_databases()
@@ -90,7 +92,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
                 _init_router(_app)
                 _init_pagination(_app)
                 yield
-    except Exception as e:
+    except Exception:
         raise
 
 
@@ -107,5 +109,6 @@ def create_app() -> FastAPI:
     _init_internalization(_app)
     _init_exception_handlers(_app)
     return _app
+
 
 app = create_app()

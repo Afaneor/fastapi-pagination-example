@@ -4,23 +4,12 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, Query, HTTPException
 from tortoise.expressions import Q
-from pydantic import BaseModel
 
 from db.models.sample_model import SampleModel
-from app.models.pagination import PaginatedResponse, CursorResponse, \
-    HybridResponse
+from app.models.pagination import PaginatedResponse, CursorResponse, HybridResponse
+from models.sample_model import SampleResponse
 
 example_router = APIRouter()
-
-
-# Response модель для SampleModel
-class SampleResponse(BaseModel):
-    id: int
-    name: str
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 def encode_cursor(data: Dict[str, Any]) -> str:
@@ -42,10 +31,11 @@ def decode_cursor(cursor: str) -> Dict[str, Any]:
 # 1. OFFSET-BASED PAGINATION
 # ============================================================================
 
+
 @example_router.get("/samples/offset")
 async def get_samples_offset(
     page: int = Query(1, ge=1, description="Номер страницы"),
-    size: int = Query(10, ge=1, le=100, description="Размер страницы")
+    size: int = Query(10, ge=1, le=100, description="Размер страницы"),
 ):
     """
     Классическая offset-based пагинация
@@ -76,7 +66,7 @@ async def get_samples_offset(
         "total": total,
         "pages": (total + size - 1) // size,
         "has_next": page * size < total,
-        "has_prev": page > 1
+        "has_prev": page > 1,
     }
 
 
@@ -84,11 +74,11 @@ async def get_samples_offset(
 # 2. PAGE-BASED PAGINATION
 # ============================================================================
 
-@example_router.get("/samples/page",
-                    response_model=PaginatedResponse[SampleResponse])
+
+@example_router.get("/samples/page", response_model=PaginatedResponse[SampleResponse])
 async def get_samples_page(
     page: int = Query(1, ge=1, description="Номер страницы"),
-    per_page: int = Query(10, ge=1, le=100, description="Записей на странице")
+    per_page: int = Query(10, ge=1, le=100, description="Записей на странице"),
 ):
     """
     Page-based пагинация с улучшенным ответом
@@ -115,7 +105,7 @@ async def get_samples_page(
         total_items=total,
         total_pages=total_pages,
         has_next=page < total_pages,
-        has_prev=page > 1
+        has_prev=page > 1,
     )
 
 
@@ -123,12 +113,11 @@ async def get_samples_page(
 # 3. CURSOR-BASED PAGINATION
 # ============================================================================
 
-@example_router.get("/samples/cursor",
-                    response_model=CursorResponse[SampleResponse])
+
+@example_router.get("/samples/cursor", response_model=CursorResponse[SampleResponse])
 async def get_samples_cursor(
-    cursor: Optional[str] = Query(None,
-                                  description="Курсор для следующей страницы"),
-    size: int = Query(10, ge=1, le=100, description="Количество записей")
+    cursor: Optional[str] = Query(None, description="Курсор для следующей страницы"),
+    size: int = Query(10, ge=1, le=100, description="Количество записей"),
 ):
     """
     Cursor-based пагинация по ID
@@ -144,12 +133,12 @@ async def get_samples_cursor(
     ❌ Курсор привязан к определенному порядку сортировки
     """
 
-    query = SampleModel.all().order_by('id')
+    query = SampleModel.all().order_by("id")
 
     # Если есть курсор - фильтруем по нему
     if cursor:
         cursor_data = decode_cursor(cursor)
-        last_id = cursor_data['last_id']
+        last_id = cursor_data["last_id"]
         query = query.filter(id__gt=last_id)
 
     samples = await query.limit(size)
@@ -157,15 +146,14 @@ async def get_samples_cursor(
     # Создаем курсор для следующей страницы
     next_cursor = None
     if samples:
-        next_cursor = encode_cursor({
-            'last_id': samples[-1].id,
-            'timestamp': datetime.now().isoformat()
-        })
+        next_cursor = encode_cursor(
+            {"last_id": samples[-1].id, "timestamp": datetime.now().isoformat()}
+        )
 
     return CursorResponse[SampleResponse](
         data=[SampleResponse.model_validate(sample) for sample in samples],
         next_cursor=next_cursor,
-        size=size
+        size=size,
     )
 
 
@@ -173,11 +161,13 @@ async def get_samples_cursor(
 # 4. TIME-BASED CURSOR PAGINATION
 # ============================================================================
 
-@example_router.get("/samples/time-cursor",
-                    response_model=CursorResponse[SampleResponse])
+
+@example_router.get(
+    "/samples/time-cursor", response_model=CursorResponse[SampleResponse]
+)
 async def get_samples_time_cursor(
     cursor: Optional[str] = Query(None, description="Временной курсор"),
-    size: int = Query(10, ge=1, le=100, description="Количество записей")
+    size: int = Query(10, ge=1, le=100, description="Количество записей"),
 ):
     """
     Time-based cursor пагинация
@@ -194,17 +184,16 @@ async def get_samples_time_cursor(
     """
 
     # Сортируем по времени создания (новые сверху)
-    query = SampleModel.all().order_by('-created_at', '-id')
+    query = SampleModel.all().order_by("-created_at", "-id")
 
     if cursor:
         cursor_data = decode_cursor(cursor)
-        cursor_time = datetime.fromisoformat(cursor_data['created_at'])
-        cursor_id = cursor_data['id']
+        cursor_time = datetime.fromisoformat(cursor_data["created_at"])
+        cursor_id = cursor_data["id"]
 
         # Учитываем случаи с одинаковым временем через ID
         query = query.filter(
-            Q(created_at__lt=cursor_time) |
-            Q(created_at=cursor_time, id__lt=cursor_id)
+            Q(created_at__lt=cursor_time) | Q(created_at=cursor_time, id__lt=cursor_id)
         )
 
     samples = await query.limit(size)
@@ -212,15 +201,14 @@ async def get_samples_time_cursor(
     next_cursor = None
     if samples:
         last_sample = samples[-1]
-        next_cursor = encode_cursor({
-            'created_at': last_sample.created_at.isoformat(),
-            'id': last_sample.id
-        })
+        next_cursor = encode_cursor(
+            {"created_at": last_sample.created_at.isoformat(), "id": last_sample.id}
+        )
 
     return CursorResponse[SampleResponse](
         data=[SampleResponse.model_validate(sample) for sample in samples],
         next_cursor=next_cursor,
-        size=size
+        size=size,
     )
 
 
@@ -228,13 +216,14 @@ async def get_samples_time_cursor(
 # 5. KEYSET PAGINATION
 # ============================================================================
 
-@example_router.get("/samples/keyset",
-                    response_model=CursorResponse[SampleResponse])
+
+@example_router.get("/samples/keyset", response_model=CursorResponse[SampleResponse])
 async def get_samples_keyset(
     cursor: Optional[str] = Query(None, description="Keyset курсор"),
     size: int = Query(10, ge=1, le=100, description="Количество записей"),
-    sort_by: str = Query('name', regex='^(name|created_at)$',
-                         description="Поле сортировки")
+    sort_by: str = Query(
+        "name", regex="^(name|created_at)$", description="Поле сортировки"
+    ),
 ):
     """
     Keyset пагинация с произвольной сортировкой
@@ -253,32 +242,29 @@ async def get_samples_keyset(
     """
 
     # Определяем направление сортировки и поле
-    order_fields = [sort_by, 'id']
+    order_fields = [sort_by, "id"]
     query = SampleModel.all().order_by(*order_fields)
 
     if cursor:
         cursor_data = decode_cursor(cursor)
-        last_value = cursor_data['last_value']
-        last_id = cursor_data['last_id']
-        sort_field = cursor_data.get('sort_by', sort_by)
+        last_value = cursor_data["last_value"]
+        last_id = cursor_data["last_id"]
+        sort_field = cursor_data.get("sort_by", sort_by)
 
         # Проверяем что сортировка не изменилась
         if sort_field != sort_by:
             raise HTTPException(
-                status_code=400,
-                detail="Cannot change sort field mid-pagination"
+                status_code=400, detail="Cannot change sort field mid-pagination"
             )
 
         # Создаем составное условие для keyset пагинации
-        if sort_by == 'name':
+        if sort_by == "name":
             query = query.filter(
-                Q(name__gt=last_value) |
-                Q(name=last_value, id__gt=last_id)
+                Q(name__gt=last_value) | Q(name=last_value, id__gt=last_id)
             )
-        elif sort_by == 'created_at':
+        elif sort_by == "created_at":
             query = query.filter(
-                Q(created_at__gt=last_value) |
-                Q(created_at=last_value, id__gt=last_id)
+                Q(created_at__gt=last_value) | Q(created_at=last_value, id__gt=last_id)
             )
 
     samples = await query.limit(size)
@@ -286,16 +272,18 @@ async def get_samples_keyset(
     next_cursor = None
     if samples:
         last_sample = samples[-1]
-        next_cursor = encode_cursor({
-            'last_value': getattr(last_sample, sort_by),
-            'last_id': last_sample.id,
-            'sort_by': sort_by
-        })
+        next_cursor = encode_cursor(
+            {
+                "last_value": getattr(last_sample, sort_by),
+                "last_id": last_sample.id,
+                "sort_by": sort_by,
+            }
+        )
 
     return CursorResponse[SampleResponse](
         data=[SampleResponse.model_validate(sample) for sample in samples],
         next_cursor=next_cursor,
-        size=size
+        size=size,
     )
 
 
@@ -307,14 +295,13 @@ async def get_samples_keyset(
 OFFSET_THRESHOLD = 1000  # После 1000 записей переключаемся на cursor
 
 
-@example_router.get("/samples/hybrid",
-                    response_model=HybridResponse[SampleResponse])
+@example_router.get("/samples/hybrid", response_model=HybridResponse[SampleResponse])
 async def get_samples_hybrid(
-    page: Optional[int] = Query(None, ge=1,
-                                description="Номер страницы (для небольших offset)"),
-    cursor: Optional[str] = Query(None,
-                                  description="Курсор (для больших данных)"),
-    size: int = Query(10, ge=1, le=100, description="Размер страницы")
+    page: Optional[int] = Query(
+        None, ge=1, description="Номер страницы (для небольших offset)"
+    ),
+    cursor: Optional[str] = Query(None, description="Курсор (для больших данных)"),
+    size: int = Query(10, ge=1, le=100, description="Размер страницы"),
 ):
     """
     Hybrid пагинация - лучшее из двух миров
@@ -341,7 +328,7 @@ async def get_samples_hybrid(
             data=cursor_result.data,
             size=size,
             next_cursor=cursor_result.next_cursor,
-            pagination_type="cursor"
+            pagination_type="cursor",
         )
 
     # Если передана страница и она в пределах threshold
@@ -353,7 +340,7 @@ async def get_samples_hybrid(
         # Проверяем, нужно ли переключиться на cursor для следующей страницы
         next_cursor = None
         if page * size >= OFFSET_THRESHOLD and samples:
-            next_cursor = encode_cursor({'last_id': samples[-1].id})
+            next_cursor = encode_cursor({"last_id": samples[-1].id})
 
         return HybridResponse[SampleResponse](
             data=[SampleResponse.model_validate(sample) for sample in samples],
@@ -361,7 +348,7 @@ async def get_samples_hybrid(
             size=size,
             total=total,
             next_cursor=next_cursor,
-            pagination_type="offset"
+            pagination_type="offset",
         )
 
     # Для больших страниц - принудительно используем cursor
@@ -371,8 +358,8 @@ async def get_samples_hybrid(
             detail={
                 "error": "Use cursor-based pagination for large datasets",
                 "suggestion": "Start with page=1 or use cursor parameter",
-                "threshold": f"Switch to cursor after {OFFSET_THRESHOLD} records"
-            }
+                "threshold": f"Switch to cursor after {OFFSET_THRESHOLD} records",
+            },
         )
 
     # Если ничего не передано - возвращаем первую страницу
@@ -385,7 +372,7 @@ async def get_samples_hybrid(
             page=1,
             size=size,
             total=total,
-            pagination_type="offset"
+            pagination_type="offset",
         )
 
 
@@ -393,18 +380,20 @@ async def get_samples_hybrid(
 # УТИЛИТЫ ДЛЯ ТЕСТИРОВАНИЯ
 # ============================================================================
 
+
 @example_router.post("/test/generate-samples/{count}")
 async def generate_test_samples(count: int):
     """Генерация тестовых образцов для демонстрации"""
 
     from faker import Faker
+
     fake = Faker()
 
     samples = []
     for i in range(count):
-        samples.append(SampleModel(
-            name=f"{fake.word()}_{i}_{fake.random_int(1000, 9999)}"
-        ))
+        samples.append(
+            SampleModel(name=f"{fake.word()}_{i}_{fake.random_int(1000, 9999)}")
+        )
 
     created_samples = await SampleModel.bulk_create(samples)
     return {"message": f"Created {len(created_samples)} samples"}
@@ -421,7 +410,7 @@ async def clear_all_samples():
 async def test_pagination_performance(
     pagination_type: str,
     page: int = Query(1, ge=1),
-    size: int = Query(10, ge=1, le=100)
+    size: int = Query(10, ge=1, le=100),
 ):
     """Тестирование производительности разных типов пагинации"""
     import time
@@ -434,10 +423,11 @@ async def test_pagination_performance(
         # Для cursor нужен предварительный запрос
         if page > 1:
             # Симуляция получения курсора
-            offset_samples = await SampleModel.all().offset(
-                (page - 1) * size - 1).limit(1)
+            offset_samples = (
+                await SampleModel.all().offset((page - 1) * size - 1).limit(1)
+            )
             if offset_samples:
-                cursor = encode_cursor({'last_id': offset_samples[0].id})
+                cursor = encode_cursor({"last_id": offset_samples[0].id})
                 result = await get_samples_cursor(cursor, size)
             else:
                 result = await get_samples_cursor(None, size)
@@ -448,13 +438,16 @@ async def test_pagination_performance(
     elif pagination_type == "time-cursor":
         if page > 1:
             # Симуляция получения временного курсора
-            offset_samples = await SampleModel.all().offset(
-                (page - 1) * size - 1).limit(1)
+            offset_samples = (
+                await SampleModel.all().offset((page - 1) * size - 1).limit(1)
+            )
             if offset_samples:
-                cursor = encode_cursor({
-                    'created_at': offset_samples[0].created_at.isoformat(),
-                    'id': offset_samples[0].id
-                })
+                cursor = encode_cursor(
+                    {
+                        "created_at": offset_samples[0].created_at.isoformat(),
+                        "id": offset_samples[0].id,
+                    }
+                )
                 result = await get_samples_time_cursor(cursor, size)
             else:
                 result = await get_samples_time_cursor(None, size)
@@ -463,19 +456,22 @@ async def test_pagination_performance(
     elif pagination_type == "keyset":
         if page > 1:
             # Симуляция получения keyset курсора
-            offset_samples = await SampleModel.all().offset(
-                (page - 1) * size - 1).limit(1)
+            offset_samples = (
+                await SampleModel.all().offset((page - 1) * size - 1).limit(1)
+            )
             if offset_samples:
-                cursor = encode_cursor({
-                    'last_value': offset_samples[0].name,
-                    'last_id': offset_samples[0].id,
-                    'sort_by': 'name'
-                })
-                result = await get_samples_keyset(cursor, size, 'name')
+                cursor = encode_cursor(
+                    {
+                        "last_value": offset_samples[0].name,
+                        "last_id": offset_samples[0].id,
+                        "sort_by": "name",
+                    }
+                )
+                result = await get_samples_keyset(cursor, size, "name")
             else:
-                result = await get_samples_keyset(None, size, 'name')
+                result = await get_samples_keyset(None, size, "name")
         else:
-            result = await get_samples_keyset(None, size, 'name')
+            result = await get_samples_keyset(None, size, "name")
     elif pagination_type == "hybrid":
         result = await get_samples_hybrid(page, None, size)
     else:
@@ -489,5 +485,5 @@ async def test_pagination_performance(
         "page": page,
         "size": size,
         "execution_time_ms": round(execution_time * 1000, 2),
-        "data_count": len(result["data"] if "data" in result else result.data)
+        "data_count": len(result["data"] if "data" in result else result.data),
     }

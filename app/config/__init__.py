@@ -3,12 +3,10 @@ from config.envs.development import DevelopmentConfig
 from config.envs.production import ProductionConfig
 
 
-class ProductionSettings(ProductionConfig, ComponentsConfig):
-    ...
+class ProductionSettings(ProductionConfig, ComponentsConfig): ...
 
 
-class DevelopmentSettings(DevelopmentConfig, ComponentsConfig):
-    ...
+class DevelopmentSettings(DevelopmentConfig, ComponentsConfig): ...
 
 
 def get_settings() -> ProductionSettings | DevelopmentSettings:
