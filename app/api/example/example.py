@@ -6,7 +6,7 @@ from fastapi import APIRouter, Query, HTTPException
 from tortoise.expressions import Q
 from pydantic import BaseModel
 
-from app.db.models.sample_model import SampleModel
+from db.models.sample_model import SampleModel
 from app.models.pagination import PaginatedResponse, CursorResponse, \
     HybridResponse
 
