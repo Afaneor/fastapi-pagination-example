@@ -1,7 +1,7 @@
 import base64
 import json
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Literal
 from fastapi import APIRouter, Query, HTTPException
 from tortoise.expressions import Q
 
@@ -34,39 +34,39 @@ def decode_cursor(cursor: str) -> Dict[str, Any]:
 
 @example_router.get("/samples/offset")
 async def get_samples_offset(
-    page: int = Query(1, ge=1, description="Номер страницы"),
-    size: int = Query(10, ge=1, le=100, description="Размер страницы"),
+    limit: int = Query(10, ge=1, le=100,
+                       description="Количество записей для возврата"),
+    offset: int = Query(0, ge=0, description="Количество записей для пропуска"),
 ):
     """
-    Классическая offset-based пагинация
+    Классическая offset-based пагинация с прямыми limit/offset параметрами
 
     Плюсы:
     ✅ Простота реализации
     ✅ Понятность для пользователей
-    ✅ Можно перейти на любую страницу
+    ✅ Можно перейти на любую позицию
+    ✅ Прямое управление limit/offset
 
     Минусы:
     ❌ Медленно на больших offset'ах
-    ❌ Проблемы консистентности при изменении данных
-    ❌ Дублирование/пропуск записей при обновлениях
     """
 
-    offset = (page - 1) * size
-
     # Получаем данные с offset
-    samples = await SampleModel.all().offset(offset).limit(size)
+    samples = await SampleModel.all().offset(offset).limit(limit)
 
     # Считаем общее количество (дорогая операция!)
     total = await SampleModel.all().count()
 
     return {
         "data": [SampleResponse.model_validate(sample) for sample in samples],
-        "page": page,
-        "size": size,
+        "limit": limit,
+        "offset": offset,
         "total": total,
-        "pages": (total + size - 1) // size,
-        "has_next": page * size < total,
-        "has_prev": page > 1,
+        "returned_count": len(samples),
+        "has_next": offset + limit < total,
+        "has_prev": offset > 0,
+        "next_offset": offset + limit if offset + limit < total else None,
+        "prev_offset": max(0, offset - limit) if offset > 0 else None,
     }
 
 
@@ -90,7 +90,6 @@ async def get_samples_page(
 
     Минусы:
     ❌ Те же проблемы производительности что у offset
-    ❌ Дорогой count() на каждый запрос
     """
 
     offset = (page - 1) * per_page
@@ -124,8 +123,7 @@ async def get_samples_cursor(
 
     Плюсы:
     ✅ Высокая производительность на любом размере данных
-    ✅ Консистентность данных (нет дублей/пропусков)
-    ✅ Масштабируется до миллиардов записей
+    ✅ Масштабируется
 
     Минусы:
     ❌ Нельзя перейти на произвольную страницу
@@ -238,7 +236,6 @@ async def get_samples_keyset(
     ❌ Нужны составные индексы для каждого поля сортировки
     ❌ Не подходит для multi-column сортировки
 
-    ВАЖНО: Создайте индексы: (name, id), (created_at, id)
     """
 
     # Определяем направление сортировки и поле
@@ -395,8 +392,8 @@ async def generate_test_samples(count: int):
             SampleModel(name=f"{fake.word()}_{i}_{fake.random_int(1000, 9999)}")
         )
 
-    created_samples = await SampleModel.bulk_create(samples)
-    return {"message": f"Created {len(created_samples)} samples"}
+    await SampleModel.bulk_create(samples)
+    return {"message": f"Created {count} samples"}
 
 
 @example_router.delete("/test/clear-samples")
@@ -408,7 +405,9 @@ async def clear_all_samples():
 
 @example_router.get("/test/performance/{pagination_type}")
 async def test_pagination_performance(
-    pagination_type: str,
+    pagination_type: Literal[
+        "offset", "cursor", "page", "time-cursor", "keyset", "hybrid"
+    ],
     page: int = Query(1, ge=1),
     size: int = Query(10, ge=1, le=100),
 ):
